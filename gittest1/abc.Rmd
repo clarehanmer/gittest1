@@ -1,0 +1,1666 @@
+---
+title: "Graphs for thesis"
+author: "Clare Hanmer"
+date: "3 September 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##reading in
+```{r}
+library(tidyverse)
+library(reshape2)
+library(lubridate)
+
+homesxaxis<- readRDS( file="C:/Working/xaxis.RData")
+
+BBDaysToUse<-readRDS( file="C:/Working/DaysToUseL18.RData")
+BBWdaysOn<-readRDS( file="C:/Working/BB18WdaysOnnew.RData")
+FAllWdaysOn<-readRDS( file="C:/Working/F18AllWdaysOn.RData")
+FDaysDataOK<-readRDS(file="C:/Working/DaysOKtoApr.RData")
+FWdaysOn <-readRDS(file="C:/Working/FWdaysOn.RData")
+F19WdaysOn <-readRDS(file="C:/Working/F19WdaysOn.RData")
+
+preheat<-readRDS(file="C:/Working/preheatDL18.RData")
+boilerType<-readRDS(file="C:/Working/allBoilerType.RData")
+
+FhomesBoth<-readRDS(file="C:/Working/F2018AND19homes.RData")
+
+BBallStats<-readRDS(file="C:/Working/BB18AllStats.RData")
+BBallStats<-mutate(BBallStats, Group="Boiler")
+
+F19AllStats<-readRDS(file="C:/Working/F19AllStats.RData")
+F18AllStats<-readRDS(file="C:/Working/F18AllStats.RData")
+
+
+FallStats<-readRDS(file="C:/Working/F18AllStats.RData")
+FallStats<-FallStats %>% 
+  mutate(Group="Hybrid", preheat="hybrid") %>% 
+  select(-startSecond,-durSecond,-month) %>% 
+  rename(totalChanges=total, mean=meanExtT, type=HPType)
+
+BBheatingPeriods<-readRDS(file="C:/Working/HeatingPeriodsBB18.RData")
+FHeatingPeriods<-readRDS(file="C:/Working/F18HeatingPeriods.RData")
+
+BBSPFirstinDayChange<-readRDS(file="C:/Working/SPFirstinDayChangeL18.RData")
+FSPFirstinDayChange<-readRDS(file="C:/Working/SPFirstinDayChangeF18.RData")
+
+BBheatingOff<-readRDS(file="C:/Working/HeatingOffBB18.RData")
+FheatingOff<-readRDS(file="C:/Working/HeatingOnF18.RData")
+
+BBMS<-readRDS(file="C:/Working/ManOrSchedDayBB18.RData")
+FMS<-readRDS(file="C:/Working/ManOrSchedDayF18.RData")
+
+BBFirstinDayChange<-readRDS(file="C:/Working/SPFirstinDayChangeL18.RData")
+FFirstinDayChange<-readRDS(file="C:/Working/SPFirstinDayChangeF18.RData")
+
+BBpmINTweak<-readRDS(file="C:/Working/pmINTweakBB18.RData")
+FpmINTweak<-readRDS(file="C:/Working/pmINTweakF.RData")
+
+
+BB18ManOrSchedHouseDay<-readRDS(file="C:/Working/ManOrSchedHDayBB18.RData") %>% 
+  mutate(type="",preheat="none",periods="",Group="Boiler", cat="")
+
+FManSPMaxinDay3<-readRDS( file="C:/Working/F18ManSPMaxinDayN.RData")
+BBManSPMaxinDay3<-readRDS(file="C:/Working/BB18ManSPMaxinDayN.RData")
+F19ManSPMaxinDay3<-readRDS( file="C:/Working/F19ManSPMaxinDay3.RData")
+
+xaxis2<- c("00:00:00", "06:00:00",  "12:00:00",
+            "18:00:00")
+
+BBsecondOn<-readRDS(file="C:/Working/BB18HPtwoSecondAll.RData")
+FsecondOn<-readRDS(file="C:/Working/F18HPtwoSecondAll.RData")
+
+BBFirstOn<-readRDS(file="C:/Working/BB18HPtwoFirstAll.RData")
+FFirstOn<-readRDS(file="C:/Working/F18HPtwoFirstAll.RData")
+```
+##particulalry big files to read in 
+````{r}
+BBTw10min<-readRDS(file="C:/Working/Tw10minBB18corr.RData")
+FTw10min<-readRDS(file="C:/Working/F18Tw10mincorr.RData")
+
+BBhomeswithtweaks<-data.frame(unique(BBTw10min$HouseID))
+colnames(BBhomeswithtweaks)<-"HouseID"
+
+BBIntT10min<-readRDS(file="C:/Working/IntT10minL18.RData")
+FIntT10min<-readRDS(file="C:/Working/F18IntT10min.RData")
+
+BB18SPOn10min<-readRDS(file="C:/Working/BB18SPOn10min.RData")
+F18SPOn10min<-readRDS(file="C:/Working/F18SPOn10min.RData")
+
+
+BBSPsDF<-readRDS(file="C:/Working/SPsDFL18.RData")
+FSPsDF<-readRDS(file="C:/Working/F18SPsDF.RData")
+```
+##Looking at missing days
+take data sets for all weekdays on
+BB - add preheat, then pick out noneatall
+look for homes with more than 20 days of data
+
+Freedom - 2 lists of home-days
+one for same 8 weeks as BB (and equivalent for 2019)
+one for Nov-April - only used for house-day analysis for external T so no need to cut anything out?
+
+```{r}
+# checking overall days to use
+Fmissing<-FAllWdaysOn %>% 
+  group_by(HouseID) %>% 
+  summarise(N=n())
+
+NoFWdays<-FAllWdaysOn%>% 
+  group_by(HouseID) %>% 
+  summarise(N=n())
+
+NoBBWdays<-BBWdaysOn%>% 
+  group_by(HouseID) %>% 
+  summarise(N=n())
+
+#pick out weekdays in 8 week period, also remove homes where less that half weekdays have good data for being on
+FJanFebWdaysA<-FAllWdaysOn %>% 
+filter(day>="2018-01-08" & day< "2018-03-03") 
+
+NoFJanFebWdays<-FJanFebWdaysA%>% 
+  group_by(HouseID) %>% 
+  summarise(N=n())
+
+FJanFebWdays<-NoFJanFebWdays %>% 
+  filter(N>=20) %>% 
+  left_join(FJanFebWdaysA, by="HouseID") %>% 
+  select(-N)
+
+FJanFebWdays19A<-F19WdaysOn %>% 
+filter(day>="2019-01-07" & day< "2019-03-02") 
+
+NoFJanFebWdays19<-FJanFebWdays19A%>% 
+  group_by(HouseID) %>% 
+  summarise(N=n())
+
+FJanFebWdays19<-NoFJanFebWdays19 %>% 
+  filter(N>=20) %>% 
+  left_join(FJanFebWdays19A, by="HouseID") %>% 
+  select(-N)
+
+#for BB just pick out no preheat, 20 days or more of data
+BBWdaystoUse<-NoBBWdays %>% 
+   left_join(preheat, by="HouseID") %>%
+    inner_join(BBhomeswithtweaks, by="HouseID") %>%
+  filter(preheat=="noneAtAll") %>% 
+  filter(N>=20) %>% 
+  left_join(BBWdaysOn, by="HouseID") %>% 
+  select(-N, -preheat, -DayOn)
+```
+#2019 stats - need to sort these
+```{r}
+firstChF18<-readRDS(file="C:/Working/AMAutoOrManF18B.RData") 
+firstChF19<-readRDS(file="C:/Working/AMAutoOrManF19B.RData") 
+
+
+F19stats<-F19AllStats %>% 
+        full_join(firstChF19,  by=c("HouseID", "day")) %>% 
+    inner_join(FJanFebWdays19,  by=c("HouseID", "day")) %>% 
+  filter(weekday) %>% 
+  select(HouseID, day, firstSched,meanExtT, manual, schedUp, manualUp) %>% 
+    mutate(year="2019")
+
+F18stats<-F18AllStats %>% 
+      full_join(firstChF18,  by=c("HouseID", "day")) %>% 
+    inner_join(FJanFebWdays,  by=c("HouseID", "day")) %>% 
+  filter(weekday) %>% 
+  select(HouseID, day, firstSched,meanExtT, manual, schedUp, manualUp) %>% 
+  mutate(year="2018")
+
+F18ManOrSchedHouseDay<-readRDS(file="C:/Working/ManOrSchedHDayF18.RData") %>% 
+  right_join(FJanFebWdays,  by=c("HouseID", "day")) %>% 
+  mutate(Group="Hybrid18")
+
+F19ManOrSchedHouseDay<-readRDS(file="C:/Working/ManOrSchedHDayF19.RData") %>% 
+   right_join(FJanFebWdays19,  by=c("HouseID", "day")) %>% 
+  mutate(Group="Hybrid19")
+
+BB18ManOrSchedHouseDay<-readRDS(file="C:/Working/ManOrSchedHDayBB18.RData") %>% 
+  right_join(BBWdaystoUse,  by=c("HouseID", "day")) %>% 
+  mutate(Group="Boiler") 
+
+F19homestouse<-data.frame(unique(FJanFebWdays19$HouseID))
+colnames(F19homestouse)<-"V1"
+#how many in F18 previous winter
+F18homesJanFeb<-data.frame(unique(FJanFebWdays$HouseID))
+colnames(F18homesJanFeb)<-"V1"
+FJanFebBoth<-data.frame(intersect(F18homesJanFeb$V1,F19homestouse$V1))
+colnames(FJanFebBoth)<-"HouseID"
+
+
+
+
+#no of homes in F19
+f19try1<-data.frame(unique(F19WdaysOn$HouseID))
+colnames(f19try1)<-"V1"
+f19try2<-data.frame(unique(FhomesBoth$HouseID))
+colnames(f19try2)<-"V1"
+f19try3<-data.frame(unique(F19AllStats$HouseID))
+colnames(f19try3)<-"V1"
+f18try1<-data.frame(unique(F18AllStats$HouseID))
+colnames(f19try1)<-"V1"
+f18try2<-data.frame(unique(FJanFebWdays$HouseID))
+colnames(f18try2)<-"V1"
+
+qu<-setdiff(f19try2$V1, f19try1$V1)
+qu2<-intersect(f18try2$V1, f19try3$V1)
+qu3<-data.frame(intersect(f18try2$V1, f19try3$V1))
+colnames(qu3)<-"V1"
+#in F19 somewhere and F18 JanFeb
+qu4<-setdiff(qu3$V1, f19try1$V1)
+
+
+```
+##no of periods in day
+this section also creates housedata
+I think I took data and put in Excel - this does not generate chart, nothing for none at all
+and repetition
+also need to update for same time range
+BBdaydata brings through a lot of data I'm not actually using right now
+```{r}
+
+
+
+BBperiods<-tibble("HouseID"=BBallStats$HouseID , "day"=BBallStats$day ,"periods"=BBallStats$periods)  
+
+BBdayData<-BBWdaystoUse %>% 
+  left_join(BBperiods, by=c("HouseID", "day")) %>% 
+  select(HouseID, day, periods) %>% 
+    mutate(Group="Boiler", cat=paste(Group, periods, sep="")) 
+
+Fperiods<-tibble("HouseID"=FallStats$HouseID , "day"=FallStats$day ,"periods"=FallStats$periods) 
+
+nFperiods<-Fperiods %>% 
+  group_by(HouseID) %>% 
+  summarise(N=n())
+
+Fhomestouse<-data.frame(unique(FJanFebWdays$HouseID))
+colnames(Fhomestouse)<-"HouseID"
+
+#looking at distribution of no of periods
+varPeriodsBB<-BBdayData %>% 
+  group_by(HouseID, periods) %>% 
+  summarise(count=n()) %>% 
+  filter(periods=="one"|periods=="two") %>% 
+  spread(periods,count) %>% 
+  mutate(one=ifelse(is.na(one), 0, one),
+        two=ifelse(is.na(two), 0, two) )
+
+
+countVarBBp<-varPeriodsBB %>% 
+  group_by(one,two) %>% 
+  summarise(n=n()) 
+
+
+pBBPeriods<-ggplot(countVarBBp,aes(x=one, y=two, size=n))+
+  geom_point()+
+  labs(x="Number of days with single period" , 
+    y="Number of days with two periods", size="Number of homes")+
+  theme_bw()+
+  scale_size_continuous(breaks=c(1, 2,5,10,20,30))
+
+
+
+
+#consistency of F periods
+consFperiods<-Fperiods %>% 
+  group_by(HouseID, periods) %>% 
+tally %>% 
+  right_join(nFperiods, by="HouseID") %>% 
+  mutate (prop=n/N) 
+
+F1period<-consFperiods %>% 
+  filter(periods=="one") %>% 
+  select(HouseID, prop) %>% 
+  rename(one=prop)
+
+Fperiods2<-consFperiods %>% 
+  filter(periods=="two") %>% 
+  select(HouseID, prop) %>% 
+  rename(two=prop) %>% 
+  full_join(F1period, by="HouseID") %>% 
+  mutate(one=ifelse(is.na(one),0,one), two=ifelse(is.na(two),0,two))
+
+FdayData<-FJanFebWdays%>% 
+  left_join(Fperiods, by=c("HouseID", "day")) %>% 
+  select(HouseID, day, periods)  %>% 
+    mutate(Group="Hybrid", cat=paste(Group, periods, sep="")) 
+
+
+varPeriodsF<-FdayData %>% 
+  inner_join(Fhomestouse, by="HouseID")  %>% 
+  group_by(HouseID, periods) %>% 
+  summarise(count=n()) %>% 
+  filter(periods=="one"|periods=="two") %>% 
+  spread(periods,count) %>% 
+  mutate(one=ifelse(is.na(one), 0, one),
+        two=ifelse(is.na(two), 0, two) )
+
+countVarFp<-varPeriodsF %>% 
+  group_by(one,two) %>% 
+  summarise(n=n()) 
+
+
+pFPeriods<-ggplot(countVarFp,aes(x=one, y=two, size=n))+
+  geom_point() +
+  labs(x="Number of days with single period" , 
+    y="Number of days with two periods", size="Number of homes")+
+ # scale_size_manual(values=c(1, 2, 3))+
+  theme_bw()
+ # + guides(colour = guide_legend(override.aes = list(size=10)))
+
+
+FhouseData<-data.frame(HouseID=unique(FDaysDataOK$HouseID), preheat="hyrbid", Group="Hybrid", type="hybrid")
+
+BBhouseData<-data.frame(HouseID=unique(BBWdaystoUse$HouseID)) %>% 
+  left_join(preheat, by="HouseID") %>% 
+   mutate(Group="Boiler") %>%
+  left_join(boilerType, by="HouseID") 
+
+combHouseData<-rbind(FhouseData, BBhouseData)
+
+###no of heating periods in day
+#periods in allStats gives a string "one" etc
+
+BBperiods<-BBheatingPeriods %>% 
+  inner_join(BBWdaystoUse, by=c("HouseID", "day")) %>% 
+  mutate(Group="Boiler") %>% 
+  inner_join(boilerType, by="HouseID")
+
+combperiods<-FHeatingPeriods %>% 
+   mutate(Group="Hybrid", type="hybrid") %>% 
+    inner_join(FJanFebWdays, by=c("HouseID", "day")) %>% 
+  rbind(BBperiods) %>% 
+  mutate(periods=ifelse((countToIn==3&countFromIn==3), "three", periods)) 
+
+ncp<-combperiods %>% 
+  group_by(Group) %>% 
+  summarise(count=n())
+
+periodStats<-combperiods %>% 
+  group_by(Group, periods) %>% 
+  summarise(N=n())  %>% 
+  mutate(Periods=ifelse(periods== "three", 3,
+                         ifelse(periods=="two",2,
+                                ifelse(periods=="one", 1,4))))
+
+
+Nperiods<-periodStats %>% 
+   group_by(Group) %>% 
+  summarise(Ntot=sum(N))  %>% 
+  full_join(periodStats, by="Group") %>% 
+  mutate(prop=N/Ntot, periods=as.factor(periods)) %>% 
+  mutate(dum=ordered(Periods)) %>% 
+  arrange(dum)
+
+#pRC1G2<-ggplot(Nperiods, aes(x= reorder(periods,c("one", "two", "three", "other","one", "two", "three", "other")), y=prop, fill=Group))+
+pRC1G2<-ggplot(Nperiods, aes(x= periods, y=prop, fill=Group))+
+    geom_bar(position="dodge", stat="identity")+
+theme_bw()+
+    scale_fill_manual(name = "Case",
+                    labels = c("Customer - Boiler, 26,633 home-days", "Freedom - Hybrid, 1,934 home-days"),
+                    values = c("coral3","darkgreen"))+
+  scale_x_discrete(limits=c("one", "two", "three", "other"))+
+ 
+  xlab("Number of heating periods in day")+
+  ylab("Proprotion of home days")+
+  theme(legend.position="bottom")+
+      guides(fill=guide_legend(nrow=2,byrow=TRUE))
+
+
+png(file="C:/Working/newRC1G2.png", width=5, height=4, units="in",res=1200)
+pRC1G2
+dev.off()
+
+png(file="C:/Working/pFPeriods.png", width=5, height=4, units="in",res=1200)
+pFPeriods
+dev.off()
+
+png(file="C:/Working/pBBPeriodscorr.png", width=5, height=4, units="in",res=1200)
+pBBPeriods
+dev.off()
+
+```
+##Histograms for start and end times
+Double check that start is man and sched
+change pm to simialr 7 hour peirod, add N
+```{r}
+breaksAM = seq(7200, 43199, by = 7200)
+
+labelsAM =c("02:00:00", "04:00:00",  "06:00:00",
+            "08:00:00", "10:00:00")
+
+breaksPM = seq(43200,86399, by = 7200)
+
+labelsPM =c("12:00:00",  "14:00:00",
+             "16:00:00", "18:00:00", "20:00:00",  "22:00:00")
+
+breaksday = seq(0, 86399, by = 7200)
+labelsday = c("00:00:00", "02:00:00", "04:00:00",  "06:00:00",
+             "08:00:00", "10:00:00", "12:00:00",  "14:00:00",
+             "16:00:00", "18:00:00", "20:00:00",  "22:00:00")
+
+breaksday2 = seq(18000, 104399, by = 10800)
+labelsday2 = c("05:00:00", "08:00:00",   "11:00:00",
+             "14:00:00", "17:00:00",  "20:00:00",
+            "23:00:00", "02:00:00")
+
+breaksAM2 = seq(18000, 43199, by = 7200)
+
+labelsAM2 =c("05:00:00", "07:00:00",  "09:00:00",
+            "11:00:00")
+
+breaksPM2 = seq(61200, 86399, by = 7200)
+
+labelsPM2 =c("17:00:00", "19:00:00",  "21:00:00",
+            "23:00:00")
+
+BBSPFirstinDayChange<-BBSPFirstinDayChange %>% 
+    inner_join(BBWdaystoUse, by=c("HouseID", "day")) %>% 
+  mutate(Group="Boiler")
+
+SPFirstinDayChange<-FSPFirstinDayChange %>% 
+  mutate(Group="Hybrid") %>% 
+  inner_join(FJanFebWdays, by=c("HouseID", "day")) %>% 
+  bind_rows(BBSPFirstinDayChange) %>% 
+  mutate(Group=ifelse(is.na(Group),"Boiler", Group)) %>% 
+  filter(firstCal<=43200)
+
+nfirst<-SPFirstinDayChange %>% 
+  group_by(Group) %>% 
+  summarise(n=n())
+
+
+
+pfirstinday<-ggplot(SPFirstinDayChange, aes(firstCal, fill = Group))+
+ geom_histogram(aes(y = ..density..*600), position = 'dodge', binwidth=600)+
+  #geom_histogram(position = 'dodge', binwidth=600)+
+  scale_x_continuous(breaks=breaksAM2, labels=labelsAM2)+
+  ylab("Proportion")+
+  xlab('First time heating requested 5am to noon')+
+  scale_fill_manual(name = "Case",
+                      labels = c("Customer-Boiler N=24,823 home-days", "Freedom-Hybrid, N=1,885 home-days"),
+                      values = c("coral3", "darkgreen"),
+                    aesthetics = "fill")+
+   theme(axis.title.x = element_text(  size=30),
+           axis.text.x  = element_text( size=30),
+         axis.text=element_text(size=24))+
+  theme_bw()+
+  theme(legend.position="bottom")+
+      guides(fill=guide_legend(nrow=2,byrow=TRUE))
+
+
+BBLastOff<-BBheatingOff %>% 
+    inner_join(BBWdaystoUse, by=c("HouseID", "day")) %>% 
+  mutate(Group="Boiler")
+
+lastOff<-FheatingOff%>% 
+  mutate(Group="Hybrid") %>% 
+  inner_join(FJanFebWdays, by=c("HouseID", "day")) %>% 
+  bind_rows(BBLastOff) %>% 
+  mutate(Group=ifelse(is.na(Group),"Boiler", Group))%>% 
+  filter( lastOff>=61200)
+
+nlast<-lastOff %>% 
+  group_by(Group) %>% 
+  summarise(n=n())
+
+plastoffinday<-ggplot(lastOff, aes(lastOff, fill = Group))+
+  geom_histogram( aes(y = ..density..*600), position = 'dodge', binwidth=600)+
+  scale_x_continuous(breaks=breaksPM2, labels=labelsPM2)+
+  xlab('Last time heating off (pm only)')+
+   ylab("Proportion")+
+  scale_fill_manual(name = "Case",
+                      labels = c("Customer-Boiler N=24,436 home-days", "Freedom-Hybrid, N=1,851 home-days"),
+                      values = c("coral3", "darkgreen"),
+                    aesthetics = "fill")+
+   theme(axis.title.x = element_text(  size=30),
+           axis.text.x  = element_text( size=30),
+         axis.text=element_text(size=24))+
+  theme_bw()+
+  theme(legend.position="bottom")+
+      guides(fill=guide_legend(nrow=2,byrow=TRUE))
+
+
+png(file="C:/Working/newRC1G3acorr.png", width=5, height=4, units="in",res=1200)
+pfirstinday
+dev.off()
+
+
+png(file="C:/Working/newRC1G3b.png", width=5, height=4, units="in",res=1200)
+plastoffinday
+dev.off()
+```
+## statistics
+11/8/19 adding by home mean to deal  with missing data
+need to check what NA in ampmddiff means
+```{r}
+#need to get line for each house-day with: manual on off, tweak, total run time, first duration, second duration
+#also line for each house - Group, preheat, type
+#first do stas for house then join to house description then do mean
+
+#stats for timeOn
+FonStats<-FallStats %>% 
+ # mutate(tweaks=totalChanges-countToIn-countFromIn, manSS=manual-tweaks) %>% 
+  select(HouseID,day,timeOn) %>% 
+  inner_join(FJanFebWdays, by=c("HouseID", "day"))
+
+BBonStats<-BBallStats %>% 
+   select(HouseID,day,timeOn) %>% 
+  inner_join(BBWdaystoUse, by=c("HouseID", "day"))
+
+stats<-rbind(BBonStats, FonStats) 
+
+timeStatsH<-stats %>% 
+    group_by(HouseID) %>% 
+  summarise(mediantimeOn=median(timeOn, na.rm=T),IQRtimeON=IQR(timeOn, na.rm=T)) %>% 
+  inner_join(combHouseData, by="HouseID") %>% 
+  group_by(Group) %>% 
+  summarise(meanmediantimeOn=mean(mediantimeOn, na.rm=T),medianmediantimeOn=median(mediantimeOn, na.rm=T), 
+            IQRmediantimeON=IQR(mediantimeOn, na.rm=T), n=n())
+
+timeStatsH2<-stats %>% 
+    group_by(HouseID) %>% 
+  summarise(meantimeOn=median(timeOn, na.rm=T)) %>% 
+  inner_join(combHouseData, by="HouseID") %>% 
+  group_by(Group) %>% 
+  summarise(meanmeantimeOn=mean(meantimeOn, na.rm=T),medianmeantimeOn=median(meantimeOn, na.rm=T), 
+            n=n())
+
+timeStatsHF<-FonStats %>% 
+    group_by(HouseID) %>% 
+  summarise(mediantimeOn=median(timeOn, na.rm=T),meantimeOn=mean(timeOn, na.rm=T)) 
+
+#looking at legth of second preiod
+BBStartSecond<-BBsecondOn %>% 
+  inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  mutate(Group="Boiler")
+
+StartSecond<-FsecondOn %>% 
+  inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  mutate(Group="Hybrid") %>% 
+  bind_rows(BBStartSecond) 
+
+secondstats<-StartSecond %>% 
+  group_by(Group) %>% 
+  summarise(medianSecond=median(lag, na.rm=T)/3600,IQRSecond=IQR(lag, na.rm=T)/3600,
+            meanSecond=mean(lag, na.rm=T)/3600,sdSecond=sd(lag, na.rm=T)/3600, n=n())
+
+secondstats2<-StartSecond %>% 
+      group_by(HouseID) %>% 
+  summarise(meanSecond=mean(lag, na.rm=T)/3600) %>% 
+  inner_join(combHouseData, by="HouseID") %>% 
+  group_by(Group) %>% 
+  summarise(meanmeanSecond=mean(meanSecond, na.rm=T), medianmeanSecond=median(meanSecond, na.rm=T))
+  
+  
+  
+
+#looking at legth of first preiod
+BBStartFirst<-BBFirstOn %>% 
+  inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  mutate(Group="Boiler")
+
+FStartFirst<-FFirstOn %>% 
+  inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  mutate(Group="Hybrid") %>% 
+  bind_rows(BBStartFirst) 
+
+firststats<-FStartFirst %>% 
+  group_by(Group) %>% 
+  summarise(medianFirst=median(lag, na.rm=T)/3600,IQRFirst=IQR(lag, na.rm=T)/3600,
+            meanFirst=mean(lag, na.rm=T)/3600,sdFirst=sd(lag, na.rm=T)/3600, n=n())
+
+firststats2<-FStartFirst %>% 
+  group_by(HouseID) %>% 
+  summarise(meanFirst=mean(lag, na.rm=T)/3600) %>% 
+  inner_join(combHouseData, by="HouseID") %>% 
+  group_by(Group) %>% 
+  summarise(meanmeanFirst=mean(meanFirst, na.rm=T), medianmeanFirst=median(meanFirst, na.rm=T))
+
+
+######
+
+firstBB<-readRDS(file="C:/Working/BB18Oneall.RData")%>% 
+   inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  mutate(Sample="Boiler")
+
+firstComb<-readRDS(file="C:/Working/F18HPoneall.RData")%>%   
+inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  mutate(Group="Hybrid") %>% 
+  bind_rows(firstBB) 
+
+firststats<-StartSecond %>% 
+  group_by(Group) %>% 
+  summarise(medianFirst=median(lag, na.rm=T)/3600,IQR=IQR(lag, na.rm=T)/3600,
+            meanSecond=mean(lag, na.rm=T)/3600,sdSecond=sd(lag, na.rm=T)/3600)
+
+
+#stats for am pm
+FonStatsampm<-FallStats %>% 
+  select(HouseID,day,ampmdDiff) %>%
+  mutate(AMPMdiff=ifelse(is.na(ampmdDiff),0, ampmdDiff)) %>% 
+  inner_join(FJanFebWdays, by=c("HouseID", "day")) %>% 
+  group_by(HouseID) %>% 
+  summarise(meandiff=mean(AMPMdiff, na.rm=T)) %>% 
+  mutate(class=(ifelse(meandiff<0,"lower",
+                       ifelse(meandiff>0,"higher",
+                              "same")))) %>% 
+  select(-meandiff)
+
+forampmgraph<-data.frame(count(FonStatsampm, class))
+
+#stats for man/sched - base on stats for each house but doesn't have IQR
+#was comparing different date ranges for two years - corrected to 8 weeks 2/9/19
+
+MSstats<-rbind(BB18ManOrSchedHouseDay,F18ManOrSchedHouseDay,F19ManOrSchedHouseDay)
+
+MSstats<-MSstats %>% 
+    mutate(manOn=ifelse(is.na(manOn),0,manOn), 
+                      manOff=ifelse(is.na(manOff),0,manOff),
+                          schedOn=ifelse(is.na(schedOn),0,schedOn),
+                               tweak=ifelse(is.na(tweak),0,tweak),
+         schedOff=ifelse(is.na(schedOff),0,schedOff)) 
+
+
+
+#need to replace NA with 0, and add BB19 stats, look at distribution for boiler and hybrid - how different?
+###CHECK I HAVE A LINE FOR EACH DAY
+
+#comparing Boiler, F18 and F19, all homes in each year
+MStable<-MSstats %>% 
+  group_by(HouseID, Group) %>% 
+  summarise(meanTweak=mean((tweak),na.rm=T),meanMan=mean((manOff+manOn),na.rm=T),meanSched=mean((schedOff+schedOn),na.rm=T),
+            meanManOn=mean(manOn,na.rm=T),n=n()) %>% 
+  group_by(Group) %>% 
+  summarise(meanTweak=mean(meanTweak,na.rm=T),medianTweak=median(meanTweak,na.rm=T),
+            meanManualSS=mean(meanMan,na.rm=T),meanSched=mean(meanSched,na.rm=T),
+            meanManualOn=mean(meanManOn,na.rm=T),
+            meanTotManual=mean((meanMan+meanTweak),na.rm=T),
+            sdTw=sd(meanTweak,na.rm=T),sdMan=sd(meanMan,na.rm=T),sdSched=sd(meanSched,na.rm=T),
+            IQRTw=IQR(meanTweak,na.rm=T),IQRMan=IQR(meanMan,na.rm=T),IQRSched=IQR(meanSched,na.rm=T), n=n() ) #n is houses
+
+#just mean of means
+MStable1a<-MSstats %>% 
+  group_by(HouseID, Group) %>% 
+  summarise(meanTweak=mean((tweak),na.rm=T),meanMan=mean((manOff+manOn),na.rm=T),meanSched=mean((schedOff+schedOn),na.rm=T),
+            meanManOn=mean(manOn,na.rm=T),n=n()) %>% 
+  group_by(Group) %>% 
+  summarise(meanmeanTweak=mean(meanTweak,na.rm=T),medianmeanTweak=median(meanTweak,na.rm=T),
+            meanmeanManualSS=mean(meanMan,na.rm=T),medianManualSS=median(meanMan,na.rm=T),
+            meanTotManual=mean((meanMan+meanTweak),na.rm=T),
+                medianTotManual=median((meanMan+meanTweak),na.rm=T),
+            n=n() ) #n is houses
+
+## comparing Freedom homes over two years -= only homes in both years
+MStable2<-MSstats %>% 
+      inner_join(FJanFebBoth, by="HouseID") %>% 
+  mutate(manOn=ifelse(is.na(manOn),0,manOn), 
+                      manOff=ifelse(is.na(manOff),0,manOff),
+                          schedOn=ifelse(is.na(schedOn),0,schedOn),
+                               tweak=ifelse(is.na(tweak),0,tweak),
+         schedOff=ifelse(is.na(schedOff),0,schedOff)) %>% 
+  group_by(Group) %>% 
+  summarise(meanTweak=mean((tweak),na.rm=T),meanManOn=mean((manOn),na.rm=T),meanManOff=mean((manOff),na.rm=T),
+            meanManTot=mean((manOn+manOff),na.rm=T),meanSched=mean((schedOff+schedOn),na.rm=T), n=n(),
+            IQRTw=IQR(meanTweak,na.rm=T),IQRMan=IQR((manOn+manOff),na.rm=T)) # N is house-days
+
+MStable2a<-MSstats %>% 
+      inner_join(FJanFebBoth, by="HouseID") %>% 
+  mutate(manOn=ifelse(is.na(manOn),0,manOn), 
+                      manOff=ifelse(is.na(manOff),0,manOff),
+                          schedOn=ifelse(is.na(schedOn),0,schedOn),
+                               tweak=ifelse(is.na(tweak),0,tweak),
+         schedOff=ifelse(is.na(schedOff),0,schedOff)) %>% 
+  group_by(HouseID, Group) %>% 
+  summarise(meanTweak=mean((tweak),na.rm=T),meanMan=mean((manOff+manOn),na.rm=T),meanSched=mean((schedOff+schedOn),na.rm=T),
+            meanManOn=mean(manOn,na.rm=T),n=n()) %>% 
+  group_by(Group) %>% 
+  summarise(meanmeanTweak=mean(meanTweak,na.rm=T),medianmeanTweak=median(meanTweak,na.rm=T),
+            meanmeanManualSS=mean(meanMan,na.rm=T),medianManualSS=median(meanMan,na.rm=T),
+            meanTotManual=mean((meanMan+meanTweak),na.rm=T),
+             medianTotManual=median((meanMan+meanTweak),na.rm=T),n=n() ) #n is houses
+#stats by house
+MSbyHouse<-MSstats %>% 
+ mutate(manOn=ifelse(is.na(manOn),0,manOn), 
+                      manOff=ifelse(is.na(manOff),0,manOff),
+                          schedOn=ifelse(is.na(schedOn),0,schedOn),
+                               tweak=ifelse(is.na(tweak),0,tweak),
+         schedOff=ifelse(is.na(schedOff),0,schedOff)) %>% 
+  group_by(HouseID, Group) %>% 
+  summarise(meanTweak=mean((tweak),na.rm=T),meanMan=mean((manOff+manOn),na.rm=T),meanSched=mean((schedOff+schedOn),na.rm=T), n=n())
+
+MSbyHouse5<-MSbyHouse %>% 
+  filter(Group!="Hybrid19")
+
+#plotting histogram by house
+phistMSHtw<-ggplot(MSbyHouse5, aes(meanTweak, fill = Group))+
+  geom_histogram(aes(y = ..density..*0.25), position = 'dodge', binwidth=0.25)+
+  xlab('Mean number of tweaks in day by house')+
+   ylab("Proportion")+
+  scale_fill_manual(name = "Case",
+                      labels = c("Customer- Boiler, N=771", "Freedom-Hybrid, N=56"),
+                      values = c("coral3", "darkgreen"),
+                    aesthetics = "fill")+
+  theme_bw()+
+  theme(legend.position="bottom")
+
+MSbyHouse6<-MSbyHouse %>% 
+  filter(Group!="Boiler")
+
+#plotting histogram by house
+phistMSHtwY<-ggplot(MSbyHouse6, aes(meanTweak, fill = Group))+
+  geom_histogram(aes(y = ..density..*0.25), position = 'dodge', binwidth=0.25)+
+  xlab('Mean number of tweaks in day by house')+
+  scale_fill_manual(name = "Year",
+                      labels = c("2018","2019"),
+                      values = c("darkred","darkblue" ),
+                    aesthetics = "fill")+
+  theme_bw()+
+  theme(legend.position="bottom")
+
+
+phistMSHmanSS<-ggplot(MSbyHouse5, aes(meanMan, fill = Group))+
+  geom_histogram(aes(y = ..density..), position = 'dodge', bins=16)+
+  xlab('Mean number of manual start or stop in day by house')+
+  scale_fill_manual(name = "Group",
+                      labels = c("Customer- Boiler, N=771", "Freedom-Hybrid, N=56"),
+                      values = c("coral3", "darkgreen"),
+                    aesthetics = "fill")+
+  theme_bw()+
+  theme(legend.position="bottom")
+
+## comparing Freedom homes over two years -= only homes in both years - this time by house first
+MStable3<-MSstats %>% 
+inner_join(FJanFebBoth, by="HouseID") %>% 
+    group_by(HouseID, Group) %>% 
+  summarise(meanTweak=mean((tweak),na.rm=T),meanMan=mean((manOff+manOn),na.rm=T),meanSched=mean((schedOff+schedOn),na.rm=T),
+            meanManOn=mean(manOn,na.rm=T),n=n()) %>% 
+  group_by(Group) %>% 
+  summarise(meanTweak=mean(meanTweak,na.rm=T),medianTweak=median(meanTweak,na.rm=T),
+            meanManualSS=mean(meanMan,na.rm=T),meanSched=mean(meanSched,na.rm=T),
+            meanManualOn=mean(meanManOn,na.rm=T),
+            meanTotManual=mean((meanMan+meanTweak),na.rm=T),
+            sdTw=sd(meanTweak,na.rm=T),sdMan=sd(meanMan,na.rm=T),sdSched=sd(meanSched,na.rm=T),
+            IQRTw=IQR(meanTweak,na.rm=T),IQRMan=IQR(meanMan,na.rm=T),IQRSched=IQR(meanSched,na.rm=T), n=n() ) #n is houses
+
+pTwByHouse<- ggplot(MSbyHouse, aes(meanTweak, fill = Group)) +
+  geom_histogram(aes(y = ..density..), position = 'dodge',bins=10)+
+  theme_bw()
+
+pmanByHouse<- ggplot(MSbyHouse, aes(meanMan, fill = Group)) +
+  geom_histogram(aes(y = ..density..), position = 'dodge',bins=20)+
+  theme_bw()
+
+png(file="C:/Working/TwbyHousenew.png", width=5, height=4, units="in",res=1200)
+phistMSHtw
+dev.off()
+
+png(file="C:/Working/YTwbyHouse.png", width=5, height=4, units="in",res=1200)
+phistMSHtwY
+dev.off()
+
+png(file="C:/Working/ManSSbyHouse.png", width=5, height=4, units="in",res=1200)
+phistMSHmanSS
+dev.off()
+```
+##histogram of mean manual switched per day, compared. Not sure I need this
+```{r}
+#frequency histogram for manual stop/start
+BBManSwitch<-BBMS %>% 
+  select(manSwitch) %>% 
+  mutate(group="Boiler")
+
+FManSwitch<-FMS %>% 
+  select(manSwitch) %>% 
+  mutate(group="Hybrid")
+
+combManSwitch<-rbind(BBManSwitch,FManSwitch)
+  
+pManSwitch<- ggplot(combManSwitch, aes(manSwitch, fill = group,bins=20)) +
+  geom_histogram(aes(y = ..density..), position = 'dodge')+
+  scale_fill_manual(name = "Group",
+                      labels = c("Boiler,3,075 homes", "Hybrid, 64 homes"),
+                      values = c("coral3", "darkgreen"),
+                    aesthetics = "fill")+
+  theme_bw()+
+  theme(legend.position="bottom")+
+  xlab("Mean manual switches/day")+
+  xlim(c(0,6))+
+   theme(axis.title.x = element_text(  size=14),
+           axis.text.x  = element_text( size=14),
+       )
+
+png(file="C:/Working/RC1G4.png", width=5, height=4, units="in",res=1200)
+pManSwitch
+dev.off()
+```
+#part 1 time input
+##RC1G1
+##RC1G10
+```{r}
+#input part
+BBTw10min2<- BBTw10min %>% 
+    mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S")) %>% 
+  inner_join(BBdayData, by=c("HouseID", "day")) %>% 
+    inner_join(BBWdaystoUse, by=c("HouseID", "day"))
+
+FTW10min2<- FTw10min %>% 
+    mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S")) %>% 
+  inner_join(FdayData, by=c("HouseID", "day"))
+
+CombTW10min<-rbind(BBTw10min2, FTW10min2)
+
+CombProportionOn<-CombTW10min %>%
+group_by(hour, Group) %>% 
+    summarise(Ups=sum(value=="up",na.rm=T),Downs=sum(value=="down",na.rm=T),Unchange=sum(value=="unchange",na.rm=T),
+            Uplow= sum(value=="uplow",na.rm=T), Downlow= sum(value=="downlow",na.rm=T), tot=Ups+Downs+Unchange+Uplow+Downlow,
+            Uptot=Ups+Uplow, Downtot=Downs+Downlow)
+
+
+#do by house
+CombProportionOnH<-CombTW10min %>%
+group_by(HouseID, hour) %>% 
+    summarise(Ups=sum(value=="up",na.rm=T),Downs=sum(value=="down",na.rm=T),Unchange=sum(value=="unchange",na.rm=T),
+            Uplow= sum(value=="uplow",na.rm=T), Downlow= sum(value=="downlow",na.rm=T), tot=Ups+Downs+Unchange+Uplow+Downlow,
+            Uptot=Ups+Uplow, Downtot=Downs+Downlow,
+          count=n(), propOn=(Uptot+Downtot+Unchange)/count ,propUp=(Uptot)/count , propDown=Downtot/count) %>% 
+  inner_join(combHouseData, by="HouseID") %>% 
+  group_by(hour, Group) %>% 
+  summarise(propOnMean=mean(propOn, na.rm=T), 
+            meanPropUp=mean(propUp, na.rm=T),meanPropDown=mean(propDown, na.rm=T))
+
+#need to run by category for facets graph - this one isn't by house
+CombProportionOnCat<-CombTW10min %>%
+  filter(cat=="Boilerone"|cat=="Boilertwo"|cat=="Hybridone"|cat=="Hybridtwo") %>% 
+group_by(cat, hour) %>% 
+summarise(Ups=sum(value=="up",na.rm=T),Downs=sum(value=="down",na.rm=T),Unchange=sum(value=="unchange",na.rm=T),
+          count=n(), propOn=(Ups+Downs+Unchange)/count ) 
+    
+
+nCombProportionOnH<-CombTW10min %>%
+group_by(HouseID, Group) %>% 
+  summarise(n1=n()) %>% 
+ group_by(Group) %>%  
+  summarise(n=n())
+
+#this currently plots all the diffrent preheat combs
+pProp<-ggplot(CombProportionOnH, aes(x=hour, y=propOnMean, group=Group,  colour=Group)) + 
+# geom_line(size=1.2) + 
+  geom_line()+
+scale_x_discrete(breaks = homesxaxis)+
+  xlab('Time of day') +
+  ylab('Proportion requesting heat')+
+ scale_colour_manual(name = "Case",
+                      labels = c( "Freedom-Hybrid, 56 homes","Customer-Boiler, 771 homes"),
+                      values = c("darkgreen","coral3"))+
+ theme_bw()+
+  theme(legend.position="bottom", legend.text=element_text(size=8))
+
+png(file="C:/Working/nnewRC1G1corr.png", width=5.354, height=4, units="in",res=1200)
+pProp
+dev.off()
+
+#only tweaks up
+pjustTweak<-ggplot(CombProportionOnH, aes(x=hour, y=meanPropUp, group=Group,  colour=Group, linetype=Group)) + 
+  geom_line(size=0.9) +
+  scale_size_manual(values = c(2,2,1)) +
+  scale_x_discrete(breaks = homesxaxis)+
+    coord_cartesian(ylim=c(0,0.5
+                           ))+
+    xlab('Time (10 minute intervals)') +
+  ylab('Proportion of homes')+
+  scale_colour_manual(values = c( "coral3","darkgreen"),
+                      labels=c("Boiler: changed up",
+                               "Hybrid: changed up"),name = "") +
+    scale_linetype_manual(name = "",
+                        labels=c("Boiler: changed up",
+                               "Hybrid: changed up"),
+                        values = c( "dashed","solid"))+
+  theme_bw()+
+  theme(legend.position="bottom", legend.text=element_text(size=10))
+
+
+
+TweaksForPlotA<-CombProportionOnH %>% 
+  filter(Group=="Boiler") %>% 
+  select(hour,propOnMean, meanPropUp, meanPropDown) %>% 
+ melt(., id.var="hour")%>% 
+  mutate(Group="Boiler")
+
+TweaksForPlot<-CombProportionOnH %>%
+  filter(Group=="Hybrid") %>% 
+  select(hour,propOnMean, meanPropUp, meanPropDown) %>% 
+ melt(., id.var="hour")%>% 
+  mutate(Group="Hybrid") %>% 
+  bind_rows(TweaksForPlotA) %>% 
+  mutate(cat=paste(Group, variable, sep="")) %>% 
+  filter(cat!="BoilerpropOnMean" ) %>% 
+  filter(cat!="HybridpropOnMean")
+  
+#tweaks up and down
+pTweakUD<- ggplot(TweaksForPlot, aes(x=hour, y=value, color=cat, group=cat , linetype=cat))+
+  geom_line(size=0.7) +
+  scale_size_manual(values = c(2,2,1)) +
+  scale_x_discrete(breaks = homesxaxis)+
+    coord_cartesian(ylim=c(0,0.3))+
+    xlab('Time (10 minute intervals)') +
+  ylab('Proportion of homes')+
+  scale_colour_manual(values = c( "coral","coral3", "green2", "darkgreen"),
+                      labels=c("Custmer-Boiler: changed down","Customer-Boiler: changed up",
+                               "Freedom-Hybrid: changed down","Freedom-Hybrid: changed up"),name = "") +
+ 
+  scale_linetype_manual(name = "",
+                        labels=c("Custmer-Boiler: changed down","Customer-Boiler: changed up",
+                               "Freedom-Hybrid: changed down","Freedom-Hybrid: changed up"),
+                        values = c("dashed",  "solid", "dashed",  "solid"))+
+  theme_bw()+
+  theme(legend.position="bottom", legend.text=element_text(size=8))+
+  guides(colour=guide_legend(nrow=2,byrow=TRUE))
+
+png(file="C:/Working/nnewRC1G6allcorr.png", width=5.354, height=4, units="in",res=1200)
+pTweakUD
+dev.off()
+
+png(file="C:/Working/justtweak.png", width=7, height=5, units="in",res=1200)
+pjustTweak
+dev.off()
+```
+#Temperature output
+take out category? Only need Boiler no preheat / Freedom and number of periods in day
+need to get standard axis
+```{r}
+#temperature output part
+BBT<-BBIntT10min %>%
+  mutate( day=as.Date(index),hour=strftime(index,format="%H:%M:%S")) %>% 
+  inner_join(BBdayData, by=c("HouseID","day")) 
+
+FT<-FIntT10min %>%
+  inner_join(FdayData, by=c("HouseID","day"))
+
+CombT<-rbind(BBT, FT)
+
+nCombT<-CombT %>%
+group_by(HouseID, Group) %>% 
+  summarise(n1=n()) %>% 
+ group_by(Group) %>%  
+  summarise(n=n())
+
+combTOut<-CombT %>% 
+  group_by(hour, cat) %>% 
+  summarise(meanT=mean(value, na.rm=T)) %>% 
+  mutate(cat=as.factor(cat))
+
+#by house
+CombTOutH<-CombT %>%
+group_by(HouseID, hour) %>% 
+summarise(meanT=mean(value, na.rm=T)) %>% 
+  inner_join(combHouseData, by="HouseID") %>% 
+  group_by(hour, Group) %>% 
+  summarise(meanmeanT=mean(meanT, na.rm=T))
+
+
+pTmeanplain<-ggplot(CombTOutH, aes(x=hour, y=meanmeanT, group=Group, colour=Group, linetype=Group)) + 
+  #geom_line(size=1.2) +
+  geom_line()+
+  scale_x_discrete(breaks = homesxaxis)+
+  coord_cartesian(ylim = c(16,21))+
+  xlab('Time of day') +
+  ylab('Mean internal temperature °C')+
+  theme_bw()+
+  scale_colour_manual(name = "Case",
+                      labels = c( "Freedom - Hybrid, 56 homes","Customer - Boiler, 771 homes"),
+                      values = c("darkgreen","coral3"))+
+    scale_linetype_manual(name = "Case",
+                        labels=c("Freedom - Hybrid, 56 homes","Customer - Boiler, 771 homes"),
+                        values = c(  "solid","dashed"))+
+  theme(legend.position="bottom")
+
+png(file="C:/Working/nnewRC1G7.png", width=5.354, height=5, units="in",res=1200)
+pTmeanplain
+dev.off()
+```
+#join together for facets graph
+need to sort out with only no preheat
+loads of n/a at moment
+```{r}
+JoinIO<-combTOut %>% 
+   filter(cat=="Boilerone"|cat=="Boilertwo"|cat=="Hybridone"|cat=="Hybridtwo") %>% 
+  full_join(CombProportionOnCat, by=c("hour", "cat")) %>% 
+  select(hour,cat,propOn,meanT) %>% 
+  mutate(propOn=(propOn*5)+16)
+
+IOstats<-JoinIO %>% 
+  group_by(cat) %>% 
+  summarise(minT=min(meanT), maxT = max(meanT), range=maxT-minT, n=n())
+
+IOforplot<-JoinIO %>% 
+  gather(graphdata,value,propOn:meanT, factor_key = T) %>% 
+   rename(Variable= graphdata)
+
+facetlabs <- c("Hybrid 1 period, N=494 home-days", "Hybrid 2 period, N=1,131 home-days", 
+               "Boiler 1 period, N=24,063 home-days", "Boiler 2 period, N=58,636 home-days")
+names(facetlabs) <- c("Hybridone", "Hybridtwo", "Boilerone", "Boilertwo")
+
+
+ptest4<-ggplot(IOforplot, aes(x=hour, y=value, group=Variable, colour=Variable)) + 
+  geom_line()  +
+  
+   scale_colour_manual(name = "Variable",
+                      labels = c( "Mean proportion of homes on","Mean internal temperature"),
+                      values = c("black","red"))+
+    #coord_cartesian(ylim=c(16,21)) +
+scale_x_discrete(breaks = xaxis2)+
+   scale_y_continuous(
+    "Output:mean temperature °C'", 
+    sec.axis = sec_axis(~ (. -16)/5, name = "Input: mean proportion on")
+  )+
+  theme(strip.text.x = element_text(size = 8))+
+theme_bw()+
+facet_wrap(~cat, nrow=2,  labeller = labeller(cat = facetlabs))+
+ theme(legend.position="bottom")
+
+
+pdf(file="C:/Working/newRC1G10.pdf", width=5.5, height=5.5)
+ptest4
+dev.off()
+```
+#RC1 plots against external T - range and night mean
+##RC1G8 and G9,
+```{r}
+#plots against external temperature
+#updated 16 Aug - I want daily range  and mean night for RC1, maxSP and is this manual for RC2, first start manual for RC3 (comparing F18 and F19)
+#also try using the whole time range for Freedom not just Jan Feb
+FallStatsOn<-FallStats %>% 
+  inner_join(FJanFebWdays, by = c("HouseID", "day")) %>% 
+  mutate(Group="Hybrid") 
+
+NFET<-FallStatsOn %>% 
+  group_by(HouseID) %>% 
+  summarise(n=n())
+
+NBBET<-BBWdaystoUse %>% 
+  group_by(HouseID) %>% 
+  summarise(n=n())
+
+BBallStatsOn<-BBallStats%>% 
+  inner_join(BBWdaystoUse, by = c("HouseID", "day")) %>% 
+  mutate(Group="Boiler")
+
+#sort into external temerpature bins (weekday results only)
+# 20/8 now excludes days heating not on
+sortBins<-FallStatsOn %>% 
+filter(day>="2018-01-08" & day< "2018-03-02") %>% 
+  bind_rows(BBallStatsOn) %>% 
+  filter(!is.na(mean)) %>% 
+  mutate(ExtTBin= round(mean)) %>% 
+  group_by (ExtTBin, Group) %>% 
+  summarise(n=n(),meanrange=mean(range, na.rm=T), sdrange=sd(range, na.rm=T), 
+            meanHrs=mean(taboveTThresh, na.rm=T), sdHrs=sd(taboveTThresh, na.rm=T),
+            meantOn=mean(timeOn, na.rm=T), sdtON=sd(timeOn, na.rm=T),
+            meanMaxSP=mean(SPmax, na.rm=T),sdMaxSP=sd(SPmax, na.rm=T),
+            meanPeriods=mean(countToIn, na.rm=T),
+            meanMan=mean(manual, na.rm=T),
+            Nightmin=mean(Nightmin, na.rm=T),
+            meannight=mean(meanNight, na.rm=T), sdNight=sd(meanNight, na.rm=T)) #%>% 
+  #filter(n>=30) #changed from 30 when I put in full Freedom date range
+
+
+plotRange<-sortBins%>% 
+  select(ExtTBin,Group, meanrange, sdrange,n) %>%
+   mutate(factor=1.96*(sdrange/(sqrt(n))), upper=meanrange+factor, lower=meanrange-factor)
+
+pRange<-ggplot(plotRange,aes(x=ExtTBin, y=meanrange, ymin=lower, ymax=upper,
+                             colour=Group, group=Group, shape=Group))+
+  geom_point()  +
+  #  geom_errorbar(aes(ymin=lower, ymax=upper), width=.2)+
+ coord_cartesian(xlim=c(-5,12)) +
+  labs(x="Daily mean external temperature (°C)" , 
+    y="Mean of daily range in temperature (°C)", colour="Heating type")+
+ scale_colour_manual(name = "Case",
+                     labels = c("Customer-Boiler, 771 homes", "Freedom-Hybrid, 56 homes"),
+                      values = c("coral3", "darkgreen") )+   
+  scale_shape_manual(name = "Case",
+                     labels = c("Customer-Boiler, 771 homes", "Freedom-Hybrid, 56 homes"),
+                     values = c(17, 19))+
+  theme_bw()+
+    theme(legend.position="bottom") 
+
+png(file="C:/Working/newRC1G8.png", width=5.35, height=4, units="in",res=1200)
+pRange
+dev.off() 
+
+plotNight<-sortBins%>% 
+  select(ExtTBin,Group, meannight, sdNight,n) %>%
+   mutate(factor=1.96*(sdNight/(sqrt(n))), upper=meannight+factor, lower=meannight-factor)
+
+
+pNight<-ggplot(plotNight,aes(x=ExtTBin, y=meannight, ymin=lower, ymax=upper,
+                             colour=Group, group=Group, shape=Group))+
+  geom_point()  +
+ #  geom_errorbar(aes(ymin=lower, ymax=upper), width=.2)+
+  coord_cartesian(ylim=c(15,20),xlim=c(-5,12)) +
+  labs(x="Daily mean external temperature (°C)" , 
+    y="Mean of temperature between midnight and 6am (°C)", colour="Heating type")+
+  scale_colour_manual(name = "Case",
+                     labels = c("Customer-Boiler, 771 homes", "Freedom-Hybrid, 56 homes"),
+                      values = c("coral3", "darkgreen") )+   
+  scale_shape_manual(name = "Case",
+                     labels = c("Customer-Boiler, 771 homes", "Freedom-Hybrid, 56 homes"),
+                     values = c(17, 19))+
+   theme_bw()+
+    theme(legend.position="bottom") 
+
+png(file="C:/Working/newRC1G9.png", width=5.35, height=4, units="in",res=1200)
+pNight
+dev.off()
+```
+##RC2 plots versus exteranl T - time heating requested, maximum SP
+use all weekdays for Freedom
+```{r}
+# plot of SP vs external T
+ plotmaxSP<-sortBins%>% 
+  select(ExtTBin,Group, meanMaxSP, sdMaxSP,n) %>%
+   mutate(factor=1.96*(sdMaxSP/(sqrt(n))), upper=meanMaxSP+factor, lower=meanMaxSP-factor)
+
+pMaxSP<-ggplot(plotmaxSP,aes(x=ExtTBin, y=meanMaxSP,
+                             colour=Group, group=Group, shape=Group))+
+  geom_point()  +
+  coord_cartesian(ylim=c(15,25)) +
+  labs(x="Daily mean external temperature (°C)" , 
+    y="Mean of maxium setpoint temperature (°C)", colour="Heating type")+
+  scale_colour_manual(name = "Case",
+                     labels = c("Customer-Boiler, 771 homes", "Freedom-Hybrid, 56 homes"),
+                      values = c("coral3", "darkgreen") )+   
+  scale_shape_manual(name = "Case",
+                     labels = c("Customer-Boiler, 771 homes", "Freedom-Hybrid, 56 homes"),
+                     values = c(17, 19))+
+  theme_bw()+
+    theme(legend.position="bottom") 
+
+png(file="C:/Working/newRC2G1.png", width=5.35, height=4, units="in",res=1200)
+pMaxSP
+dev.off()
+
+plotTimeOn<-sortBins %>%
+   select(ExtTBin,Group, meantOn, sdtON,n) %>%
+   mutate(factor=1.96*(sdtON/(sqrt(n))), upper=meantOn+factor, lower=meantOn-factor)
+
+pTimeOn<-ggplot(plotTimeOn,aes(x=ExtTBin, y= meantOn,colour=Group, 
+                               group=Group, shape=Group))+
+  geom_point()  +
+ # geom_errorbar(aes(ymin=lower, ymax=upper), width=.2)+
+ coord_cartesian(ylim=c(8,15), xlim=c(-5,12)) +
+  labs(x="Daily mean external temperature (°C)" , 
+    y="Mean of hours heating requested in day", colour="Heating type")+
+  scale_colour_manual(name = "Group",
+                     labels = c("Customer-Boiler, 771 homes", "Freedom-Hybrid, 56 homes"),
+                      values = c("coral3", "darkgreen") )+   
+  scale_shape_manual(name = "Group",
+                     labels = c("Customer-Boiler, 771 homes", "Freedom-Hybrid, 56 homes"),
+                     values = c(17, 19))+
+  theme_bw()+
+    theme(legend.position="bottom") 
+
+png(file="C:/Working/newRC2G2.png", width=5.35, height=4, units="in",res=1200)
+pTimeOn
+dev.off()
+
+plotSP<-sortBins %>% 
+  select(ExtTBin,meanMaxSP) %>% 
+  melt(id.vars="ExtTBin")
+
+pSP<-ggplot(plotSP,aes(x=ExtTBin, y=value,colour=variable, group=variable, shape=variable))+
+  geom_point()  +
+  labs(x="Daily mean external temperature (?C)" , 
+    y="Daily internal temperature range (?C)", colour="Heating type")
+
+```
+##Additional for RC2
+Flip to 30
+```{r}
+### flip to 30 behaviour with Freedom
+FSPmax<-FManSPMaxinDay3 %>% 
+         inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  group_by(HouseID) %>% 
+  summarise(n=n(), propMan=sum(isMan, na.rm=T)/n, meanMaxSP=mean(maxSP, na.rm=T)) %>% 
+  mutate(group="Hybrid", year="2018")
+  
+BBSPmax<-BBManSPMaxinDay3 %>% 
+         inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  group_by(HouseID) %>% 
+  summarise(n=n(), propMan=sum(isMan, na.rm=T)/n, meanMaxSP=mean(maxSP, na.rm=T))%>% 
+  mutate(group="Boiler", year="2018")
+
+FdaySPMax<-FManSPMaxinDay3 %>%
+  inner_join(FJanFebWdays, by=c("HouseID","day")) %>%
+  mutate(roundMax=round(maxSP)) %>% 
+    filter(maxSP>=15) %>% 
+  group_by(roundMax, isMan) %>% 
+  summarise(n=n())
+
+#how many homes flip to 30?
+Fflip<-filter(FManSPMaxinDay3 , maxSP>29) %>% 
+    inner_join(FJanFebWdays, by=c("HouseID","day")) %>%
+    group_by(HouseID) %>% 
+  summarise(n=n())
+
+pFStack<-ggplot(FdaySPMax, aes(x=factor(roundMax), fill=isMan, y=n))+
+  geom_bar(position="stack", stat="identity")+
+  theme_bw()+
+    scale_fill_manual(name = "",
+                    labels = c("Scheduled change","Manual change" ),
+                    values = c("darkblue", "darkred"))+
+
+  xlab("Maximum setpoint in day rounded to nearest 1°C")+
+  ylab("Number of home-days")
+
+png(file="C:/Working/Fstack.png", width=5, height=4, units="in",res=1200)
+pFStack
+dev.off()
+
+BBdaySPmax<-BBManSPMaxinDay3 %>% 
+           inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  mutate(roundMax=round(maxSP)) %>% 
+    filter(maxSP>=15) %>% 
+  group_by(roundMax, isMan) %>% 
+  summarise(n=n())
+
+pBBStack<-ggplot(BBdaySPmax, aes(x=factor(roundMax), fill=isMan, y=n))+
+  geom_bar(position="stack", stat="identity")+
+  theme_bw()+
+    scale_fill_manual(name = "",
+                    labels = c("Scheduled change","Manual change" ),
+                    values = c("darkblue", "darkred"))+
+
+  xlab("Maximum setpoint in day rounded to nearest 1°C")+
+  ylab("Number of home-days")
+
+png(file="C:/Working/BBstack.png", width=5, height=4, units="in",res=1200)
+pBBStack
+dev.off()
+
+
+  
+
+##another way to plot
+SPmaxinDay<-rbind(BBManSPMaxinDay3)
+
+phistManByHouse<-ggplot(combSPmax, aes(propMan, fill = group))+
+  geom_histogram(aes(y = ..density..), position = 'dodge', bins=10)+
+  xlab('Proportion of days with manual maximum setpoint, by house')+
+  scale_fill_manual(name = "Group",
+                      labels = c("Boiler", "Hybrid"),
+                      values = c("coral3", "darkgreen"),
+                    aesthetics = "fill")+
+   theme(axis.title.x = element_text(  size=30),
+           axis.text.x  = element_text( size=30),
+         axis.text=element_text(size=24))+
+  theme_bw()+
+  theme(legend.position="bottom")
+
+png(file="C:/Working/flippropMan.png", width=5, height=4, units="in",res=1200)
+phistManByHouse
+dev.off()
+
+phistMaxManSPByHouse<-ggplot(combSPmax, aes(meanMaxSP, fill = group))+
+  geom_histogram(aes(y = ..density..), position = 'dodge', bins=16)+
+  xlab('Mean maximum setpoint in day by house')+
+  scale_fill_manual(name = "Group",
+                      labels = c("Boiler", "Hybrid"),
+                      values = c("coral3", "darkgreen"),
+                    aesthetics = "fill")+
+   theme(axis.title.x = element_text(  size=30),
+           axis.text.x  = element_text( size=30),
+         axis.text=element_text(size=24))+
+  theme_bw()+
+  theme(legend.position="bottom")
+
+png(file="C:/Working/flipSPMax.png", width=5, height=4, units="in",res=1200)
+phistMaxManSPByHouse
+dev.off()
+
+```
+##RC3 comparing proportion of sched first change year to year
+also plotting against ecternal T
+check I am using right homes list - is FHomes both cut off by number of days?
+```{r}
+#I need dayautoormanual for F18 and F19
+#shoudl read in a beginning?
+#this is data for whole day
+F19ManFirst<-readRDS(file="C:/Working/DayAutoOrManF19.RData") %>% 
+  inner_join(FJanFebBoth, by="HouseID") %>% 
+    inner_join(FJanFebWdays19, by=c("HouseID","day")) %>% 
+  mutate(year="2019") %>% 
+  inner_join(F19AllStats, by=c("HouseID","day")) %>% 
+    select(HouseID, day, unchanged, schedUp, schedDown, manualUp, manualDown,year, meanExtT)
+
+F18ManFirst<-readRDS(file="C:/Working/DayAutoOrManF18.RData")%>% 
+  inner_join(FJanFebBoth, by="HouseID") %>% 
+      inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  mutate(year="2018")%>% 
+  inner_join(F18AllStats, by=c("HouseID","day")) %>% 
+  select(HouseID, day, unchanged, schedUp, schedDown, manualUp, manualDown,year, meanExtT)
+
+FManFirstComb<-rbind(F18ManFirst, F19ManFirst)
+
+#finding mean external temeprature for 33 homes in Jan Feb
+FWinterT<-FManFirstComb %>% 
+   group_by(year) %>% 
+  summarise( meanExt=mean(meanExtT, na.rm=T))
+
+FManFirstStats<-FManFirstComb %>% 
+   group_by(HouseID, year) %>% 
+  summarise( n=n(), unch=sum(unchanged,na.rm=T)/n, schedUp=sum(schedUp,na.rm=T)/n,schedDown=sum(schedDown,na.rm=T)/n,
+             manUp=sum(manualUp,na.rm=T)/n,manDown=sum(manualDown,na.rm=T)/n) %>% 
+  group_by(year) %>% 
+  summarise(meanSup=mean(schedUp,na.rm=T),meanSdown=mean(schedDown,na.rm=T), meanMup=mean(manUp,na.rm=T),meanMdown=mean(manDown,na.rm=T),meanUnch=mean(unch, na.rm=T), n=n() )
+
+FManFirstStatsH<-FManFirstComb %>% 
+   group_by(HouseID, year) %>% 
+  summarise( n=n(), unch=sum(unchanged,na.rm=T)/n, schedUp=sum(schedUp,na.rm=T)/n,schedDown=sum(schedDown,na.rm=T)/n,
+             manUp=sum(manualUp,na.rm=T)/n,manDown=sum(manualDown,na.rm=T)/n)
+
+#plotting histogram by house
+phist2year<-ggplot(FManFirstStatsH, aes(manUp, fill = year))+
+  geom_histogram(aes(y = ..density../8), position = 'dodge', bins=8)+
+  xlab('Mean proportion of days with manual first start')+
+   ylab("Proportion of homes")+
+  scale_fill_manual(name = "Year",
+                      labels = c("2018","2019"),
+                      values = c("darkred","darkblue" ),
+                    aesthetics = "fill")+
+  theme_bw()#+
+  #theme(legend.position="bottom")
+
+phist2yearS<-ggplot(FManFirstStatsH, aes(schedUp, fill = year))+
+  geom_histogram(aes(y = ..density../8), position = 'dodge', bins=8)+
+  xlab('Distibution of proportion of scheduled first start by home')+
+  ylab("Proportion")+
+  scale_fill_manual(name = "Year",
+                      labels = c("2018","2019"),
+                      values = c("darkred","darkblue" ),
+                    aesthetics = "fill")+
+  theme_bw()
+
+png(file="C:/Working/F1819propManUP2.png", width=5, height=4, units="in",res=1200)
+phist2year
+dev.off()
+
+png(file="C:/Working/F1819propSchUP2.png", width=5, height=4, units="in",res=1200)
+phist2yearS
+dev.off()
+
+FManFirstStatsD<-FManFirstComb %>% 
+   group_by(day, year) %>% 
+  summarise( n=n(), unch=sum(unchanged,na.rm=T)/n, schedUp=sum(schedUp,na.rm=T)/n,schedDown=sum(schedDown,na.rm=T)/n,
+             manUp=sum(manualUp,na.rm=T)/n,manDown=sum(manualDown,na.rm=T)/n) %>% 
+  group_by(year) %>% 
+  summarise(meanSup=mean(schedUp,na.rm=T),meanSdown=mean(schedDown,na.rm=T), meanMup=mean(manUp,na.rm=T),meanMdown=mean(manDown,na.rm=T),meanUnch=mean(unch, na.rm=T) )
+
+sortBins5<-FManFirstComb %>% 
+  filter(!is.na(meanExtT)) %>% 
+  mutate(ExtTBin= round(meanExtT)) %>% 
+  group_by (ExtTBin, year) %>% 
+  summarise(n=n(), unch=sum(unchanged,na.rm=T)/n, schedUp=sum(schedUp,na.rm=T)/n,schedDown=sum(schedDown,na.rm=T)/n,
+             manUp=sum(manualUp,na.rm=T)/n,manDown=sum(manualDown,na.rm=T)/n) %>% 
+  filter(n>=50)
+
+pYear<-ggplot(sortBins5,aes(x=ExtTBin, y= manUp,colour=year,
+                               shape=year))+
+  geom_point()  +
+  labs(x="Mean for home of daily maximum setpoint temperature (°C) rounded to 1°C" , 
+    y="Mean of proportion of manual increase first changein day")+
+  theme_bw()+
+  theme(legend.position="bottom")
+
+png(file="C:/Working/F1819firstMan.png", width=5, height=4, units="in",res=1200)
+pYear
+dev.off()
+```
+##looking at proportion of manual and scheduled F18 and F19, plotted against external 
+higher manual in 2019 across all temperatures 
+```{r}
+#comparing 18 and 19 just Jan Feb, 33 homes the same
+
+
+
+#picking up manual first change
+#comparing 18 and 19
+#and by external T
+sortBins2<-F18stats %>% 
+  bind_rows(F19stats) %>% 
+  inner_join(FJanFebBoth, by="HouseID") %>% 
+  filter(!is.na(meanExtT) ) %>% 
+  mutate(ExtTBin= round(meanExtT)) %>% 
+  group_by (ExtTBin, year) %>% 
+  summarise(n=n(),propSched=sum(firstSched, na.rm=T)/n, meanMan=mean(manual, na.rm=T),
+            propSchedUp=sum(schedUp, na.rm=T)/n, propManUp=mean(manualUp, na.rm=T)) %>% 
+  filter(n>=50) 
+
+#looking at stats
+statsFirstStart<-F18stats %>% 
+  bind_rows(F19stats) %>% 
+  inner_join(FJanFebBoth, by="HouseID") %>% 
+  group_by (year) %>% 
+  summarise(n=n(),propSched=sum(schedUp, na.rm=T)/n, propMan=mean(manualUp, na.rm=T))
+
+#do this by house
+
+statsFirstStartH<-F18stats %>% 
+  bind_rows(F19stats) %>% 
+  inner_join(FJanFebBoth, by="HouseID") %>% 
+  group_by (year, HouseID) %>% 
+  summarise(n=n(),propSched=sum(schedUp, na.rm=T)/n, propMan=mean(manualUp, na.rm=T)) %>% 
+group_by(year) %>% 
+  summarise(meanpropSched=mean(propSched, na.rm=T), medianpropSched=median(propSched, na.rm=T),
+            meanpropMan=mean(propMan, na.rm=T),medianpropMan=median(propMan, na.rm=T))
+
+#not sure I need schedueld plot - totman clearer and more interesting
+pYsched<-ggplot(sortBins2,aes(x=ExtTBin, y= propSched,colour=year,
+                               group=year, shape=year))+
+  geom_point()  +
+  labs(x="Daily mean external temperature (°C)" , 
+    y="Proportion of schedueld changes", colour="Year")+
+
+  theme(legend.position="bottom") +
+  theme_bw()
+
+png(file="C:/Working/F1819firstsched.png", width=5, height=4, units="in",res=1200)
+pYsched
+dev.off()
+
+pYtotman<-ggplot(sortBins2,aes(x=ExtTBin, y= meanMan,colour=year,
+                               group=year, shape=year))+
+  geom_point()  +
+  labs(x="Daily mean external temperature (°C)" , 
+    y="Mean daily manual changes", colour="Year")+
+
+  theme(legend.position="bottom") +
+  theme_bw()
+
+pYear<-ggplot(sortBins2,aes(x=ExtTBin, y= propSchedUp,colour=year,
+                               shape=year))+
+  geom_point()  +
+  labs(x="Mean for home of daily maximum setpoint temperature (°C) rounded to 1°C" , 
+    y="Mean of proportion of scheduled first changein day")+
+  theme_bw()+
+  theme(legend.position="bottom")
+
+
+png(file="C:/Working/PYear.png", width=5.35, height=4, units="in",res=1200)
+pYear
+dev.off()
+```
+##looking at 8am/pm
+```{r}
+#median 8am and 8pm SP
+F18median0800<-F18SPOn10min %>% 
+      mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S"))  %>% 
+       inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  filter(hour=="08:00:00") %>% 
+  group_by(HouseID) %>% 
+summarise(medianSP=median(value, na.rm=T)) %>% 
+ summarise(median=median(medianSP, na.rm=T), mean=mean(medianSP, na.rm=T),IQR=IQR(medianSP, na.rm=T))
+
+F18median2000<-F18SPOn10min %>% 
+      mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S"))  %>% 
+       inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  filter(hour=="20:00:00") %>% 
+  group_by(HouseID) %>% 
+summarise(medianSP=median(value, na.rm=T)) %>% 
+  summarise(median=median(medianSP, na.rm=T), mean=mean(medianSP, na.rm=T),IQR=IQR(medianSP, na.rm=T))
+
+BB18median0800<-BB18SPOn10min %>% 
+      mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S"))  %>% 
+       inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  filter(hour=="08:00:00") %>% 
+  group_by(HouseID) %>% 
+summarise(medianSP=median(value, na.rm=T)) %>% 
+ summarise(median=median(medianSP, na.rm=T), mean=mean(medianSP, na.rm=T),IQR=IQR(medianSP, na.rm=T))
+
+BB18median2000<-BB18SPOn10min %>% 
+      mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S"))  %>% 
+       inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  filter(hour=="20:00:00") %>% 
+  group_by(HouseID) %>% 
+summarise(medianSP=median(value, na.rm=T)) %>% 
+  summarise(median=median(medianSP, na.rm=T), mean=mean(medianSP, na.rm=T),IQR=IQR(medianSP, na.rm=T))
+
+##looking at mean
+
+F18mean0800<-F18SPOn10min %>% 
+      mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S"))  %>% 
+       inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  filter(hour=="08:00:00") %>% 
+  group_by(HouseID) %>% 
+summarise(meanSP=mean(value, na.rm=T)) %>% 
+ summarise(median=median(meanSP, na.rm=T), mean=mean(meanSP, na.rm=T))
+
+F18mean2000<-F18SPOn10min %>% 
+      mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S"))  %>% 
+       inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  filter(hour=="20:00:00") %>% 
+  group_by(HouseID) %>% 
+summarise(meanSP=mean(value, na.rm=T)) %>% 
+  summarise(median=median(meanSP, na.rm=T), mean=mean(meanSP, na.rm=T))
+
+BB18mean0800<-BB18SPOn10min %>% 
+      mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S"))  %>% 
+       inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  filter(hour=="08:00:00") %>% 
+  group_by(HouseID) %>% 
+summarise(meanSP=mean(value, na.rm=T)) %>% 
+ summarise(median=median(meanSP, na.rm=T), mean=mean(meanSP, na.rm=T))
+
+BB18mean2000<-BB18SPOn10min %>% 
+      mutate(day=as.Date(index), hour=strftime(index,format="%H:%M:%S"))  %>% 
+       inner_join(BBWdaystoUse, by=c("HouseID","day")) %>% 
+  filter(hour=="20:00:00") %>% 
+  group_by(HouseID) %>% 
+summarise(meanSP=mean(value, na.rm=T)) %>% 
+  summarise(median=median(meanSP, na.rm=T), mean=mean(meanSP, na.rm=T))
+```
+
+#Evening experience
+```{r}
+BBNewThresh<- readRDS(file="C:/Working/NewThreshL18.RData")
+FNewThresh<- readRDS(file="C:/Working/F18newThresh.RData")
+
+Fhomestouse<-data.frame(unique(FJanFebWdays$HouseID))
+colnames(Fhomestouse)<-"HouseID"
+ FthreshGood<-FNewThresh %>%  inner_join(Fhomestouse, by="HouseID")
+
+#addd day to IntT10min so can be merged
+BBIntT10minD<-BBIntT10min %>% 
+  mutate(day=as.Date(index)) %>% 
+  inner_join(BBWdaystoUse, by=c("HouseID", "day"))
+#pick up each switch above/below threshold temeprrature (does not pick up tweaks during IN period)
+# couold alos do this using AllChanges from BBFrequent
+BBFindPeriods<-BBSPsDF %>% 
+  inner_join(BBNewThresh,by="HouseID")%>%
+  #left_join(preheat, by="HouseID") %>%
+  mutate(toIN=(lag(value)<=Threshold & value>Threshold), fromIN=(lag(value)>Threshold & value<=Threshold)) %>% 
+  filter(toIN==T |fromIN==T) %>% 
+  mutate (end=lead(Time),lag=difftime(lead(Time),Time, units="secs"),day=as.Date(Time), start=strftime(Time,format="%H:%M:%S")
+          , numhour=as.numeric(hms(start)))
+
+#Find longest IN period after midday and the start and end temperatures for this
+#will only pick up days with spearte heating period after noon, and only the longest of several periods
+BBpmPeriods<- BBFindPeriods %>% 
+  inner_join(BBWdaystoUse, by=c("HouseID","day"))  %>% 
+  filter(toIN & numhour>43200 & lag>=3600 & lag<=43200) %>% 
+  group_by(HouseID,day) %>% 
+  summarise(maxlag= max(lag)) %>%
+  rename(lag=maxlag) %>% 
+  left_join(BBFindPeriods, by=c("HouseID", "day", "lag")) %>% 
+  mutate(index=as.POSIXct(round((as.numeric(Time))/(10*60))*(10*60),origin='1970-01-01')) %>%
+  left_join(BBIntT10min,by=c("HouseID","index")) %>% 
+  select(HouseID, day, index, end, value.x,value.y, lag) %>% 
+  mutate(end10=as.POSIXct(round((as.numeric(end))/(10*60))*(10*60),origin='1970-01-01')) %>%
+  filter(as.numeric(lag)>=3600& as.numeric(lag)<43200) %>% 
+  select(-end) %>% 
+  rename(start=index, startVal=value.y, startSP=value.x)
+
+# to neaten plot select all those with duration within particualr range
+#need to use IntT10min again to get all temps in period- heatingperiods3 only has beginininng and end
+
+BBTsIN5hr<-BBIntT10minD %>% 
+  left_join(BBpmINTweak, c("HouseID", "day")) %>% 
+  inner_join(BBpmPeriods, by=c("HouseID","day")) %>% 
+  right_join(BBdayData,  by=c("HouseID","day")) %>% 
+  filter(as.numeric(lag)>17700 &as.numeric(lag)<18030 ) %>% 
+  mutate(flag=(index>=start&index<=end10)) %>% 
+  filter(flag) %>% 
+  mutate(rise=value-startVal,deltat=difftime(index,start, units = "mins"), cat="Boiler") %>% 
+  select(HouseID, rise, deltat, cat, tweak, Group) %>% 
+  filter(deltat<300)
+
+#do the same for Freedom
+#pick up each switch above/bekow threshold temeprrature (does not pick up tweaks during IN period)
+FFindPeriods<-FSPsDF %>% 
+  inner_join(FNewThresh,by="HouseID")%>%
+  mutate(toIN=(lag(value)<=Threshold & value>Threshold), fromIN=(lag(value)>Threshold & value<=Threshold) ) %>% 
+  filter(toIN==T |fromIN==T) %>% 
+  mutate ( end=lead(Time),lag=difftime(lead(Time),Time, units="secs"),day=as.Date(Time), start=strftime(Time,format="%H:%M:%S")
+          , numhour=as.numeric(hms(start))) 
+ 
+FpmPeriods<- FFindPeriods %>% 
+  inner_join(FJanFebWdays, by=c("HouseID","day")) %>% 
+  filter(toIN & numhour>43200 & lag>=3600& lag<=43200) %>% 
+  group_by(HouseID,day) %>% 
+  summarise(maxlag= max(lag)) %>%
+  rename(lag=maxlag) %>% 
+  inner_join(FFindPeriods, by=c("HouseID", "day", "lag")) %>% 
+  mutate(index=as.POSIXct(round((as.numeric(Time))/(10*60))*(10*60),origin='1970-01-01')) %>%
+  left_join(FIntT10min,by=c("HouseID","index")) %>% 
+  select(HouseID, day.x, index, end, value.x,value.y, lag) %>% 
+  mutate(end10=as.POSIXct(round((as.numeric(end))/(10*60))*(10*60),origin='1970-01-01')) %>%
+  filter(as.numeric(lag)>=3600& as.numeric(lag)<43200) %>% 
+  select(-end) %>% 
+  rename(start=index, startVal=value.y, startSP=value.x, day=day.x)
+
+# for 5 hour plot
+FTsIN5hr<-FIntT10min %>% 
+  left_join(FpmINTweak, c("HouseID", "day")) %>% 
+  inner_join(FpmPeriods, by=c("HouseID","day")) %>% 
+  inner_join(FdayData, by=c("HouseID","day")) %>% 
+  filter(as.numeric(lag)>17100 &as.numeric(lag)<18900 ) %>% 
+  mutate(flag=(index>=start&index<=end10)) %>% 
+  filter(flag) %>% 
+  mutate(rise=value-startVal,deltat=difftime(index,start, units = "mins")) %>% 
+  select(HouseID, rise, deltat, cat, tweak, Group) %>% 
+  filter(deltat<300) %>% 
+  mutate(cat=ifelse(is.na(tweak),"HybridNoTweak", "HybirdTweak"))
+  
+
+
+#####  combining and plotting
+TsIN5hrcomb<-rbind(BBTsIN5hr, FTsIN5hr)
+
+#saveRDS(TsIN5hrcomb, file="C:/Working/TsIN5hrcomb2.RData")
+
+CombTrise<-TsIN5hrcomb %>% 
+ # filter(cat!="sixtytweak") %>% 
+  group_by(HouseID, deltat, cat) %>% 
+  summarise(mean=mean(rise, na.rm=T), count=n()) %>% 
+  group_by(deltat, cat) %>% 
+  summarise(N=n(), meanRise=mean(mean, na.rm=T), sdRise=sd(mean, na.rm=T)) 
+
+#to get N for graph
+NTrise<-TsIN5hrcomb %>% 
+ # filter(cat!="sixtytweak") %>% 
+  group_by( cat) %>% 
+  summarise(count=n())
+
+
+pEve<-ggplot(CombTrise, aes(x=deltat, y=meanRise, group=cat, color=cat, linetype=cat)) + 
+ # geom_line(size=1.2)+
+  geom_line()+
+  coord_cartesian(ylim=c(0,3))+
+  xlab('Time elapsed since start of heating period (minutes)') + 
+  ylab('Mean temperature rise since start of heating period  °C')+
+  theme_bw()+
+  theme(legend.position="bottom", legend.text=element_text(size=8))+
+  guides(colour=guide_legend(nrow=2,byrow=TRUE))+
+  scale_color_manual(name = "Case",
+                    labels = c("Boiler no preheat N=45,521 home-days","Hybrid with tweak N=3,510 home-days","Hybrid no tweak N=6,566 home-days"),
+                    values = c( "darkred","dark green", "green"))+
+scale_linetype_manual(name = "Case",
+                    labels = c("Boiler no preheat N=45,521 home-days","Hybrid with tweak N=3,510 home-days","Hybrid no tweak N=6,566 home-days"),
+                  
+                   values = c("dashed","twodash","solid"))
+
+
+png(file="C:/Working/nnewRC1G11a.png", width=5.35, height=4, units="in",res=1200)
+pEve
+dev.off()
+
+
+
+```
+
